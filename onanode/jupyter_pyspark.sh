@@ -1,41 +1,12 @@
 #!/bin/bash
 
+sudo easy_install pip
+sudo pip install jupyter
 export PYSPARK_DRIVER_PYTHON_OPTS='notebook --port=8085 --ip=0.0.0.0'
 export PYSPARK_DRIVER_PYTHON=jupyter
 
-function get_jupyter_url {
-    jupyter notebook list | tr ' ' '\n' | grep 8085
-}
+sudo gsutil cp gs://etsy-mlinfra-prod-shared-user-scratch-data-6bsh/jars/hadoop-lzo-0.4.20.jar /usr/lib/spark/jars
+nohup pyspark --jars /usr/lib/spark/jars/hadoop-lzo-0.4.20.jar &
+tail nohup.out
 
-function get_jupyter_url_tail {
-    JUPYTER_URL=$1
-    echo $JUPYTER_URL | tr ' ' '\n' | grep -o "8085.*"
-}
-
-JUPYTER_URL=$(get_jupyter_url)
-
-if [[ -n "${JUPYTER_URL}" ]]; then
-    URL_TAIL="$(get_jupyter_url_tail ${JUPYTER_URL})"
-    if [[ -n "${URL_TAIL}" ]]; then
-        printf "http://%s:%s\n" $(hostname -I) ${URL_TAIL}
-        exit
-    fi
-else
-    nohup pyspark > ps.out 2> ps.err < /dev/null &
-fi
-
-TRIES=0
-MAX_TRIES=10
-while true; do
-    if [[ "${TRIES}" -gt "${MAX_TRIES}" ]]; then 
-        echo "Jupyter instantiation failed; exiting."
-    fi
-    JUPYTER_URL=$(get_jupyter_url)
-    URL_TAIL=$(get_jupyter_url_tail ${JUPYTER_URL})
-    if [[ -n "${URL_TAIL}" ]]; then
-        printf "http://%s:%s\n" $(hostname -I) ${URL_TAIL}
-        break
-    fi
-    sleep $((2**$TRIES))
-    TRIES=$(($TRIES+1))
-done
+printf "http://%s:%s\n" $(hostname -I) $(cat nohup.out | grep -o '8085.*' | tail -n1)
